@@ -94,9 +94,6 @@ public class WebClientIT {
                                                          .retrieve()
                                                          .bodyToMono(BeerPagedList.class);
 
-
-//        BeerPagedList pagedList = beerPagedListMono.block();
-//        pagedList.getContent().forEach(beerDto -> System.out.println(beerDto.toString()));
         beerPagedListMono.publishOn(Schedulers.parallel())
                          .subscribe(beerPagedList -> {
 

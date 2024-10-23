@@ -9,7 +9,9 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -25,7 +27,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
-@WebFluxTest(BeerController.class)
+//@WebFluxTest(BeerController.class)
+@SpringBootTest
+@AutoConfigureWebTestClient
 class BeerControllerTest {
 
     @Autowired
@@ -47,11 +51,14 @@ class BeerControllerTest {
 
     @Test
     void testGetBeerById() {
-        UUID beerId = UUID.randomUUID();
         given(beerService.getById(any(), any())).willReturn(Mono.just(validBeer));
 
+        WebTestClient.ResponseSpec exchange = webTestClient.get()
+                                                           .uri("/api/v1/beer/1")
+                                                           .accept(MediaType.APPLICATION_JSON)
+                                                           .exchange();
         webTestClient.get()
-                     .uri("/api/v1/beer/" + beerId)
+                     .uri("/api/v1/beer/1")
                      .accept(MediaType.APPLICATION_JSON)
                      .exchange()
                      .expectStatus()
@@ -96,7 +103,7 @@ class BeerControllerTest {
 
         BeerPagedList beerPagedList = new BeerPagedList(List.of(beer1, beer2));
 
-        given(beerService.listBeers(any(), any(), any(), any())).willReturn(beerPagedList);
+        given(beerService.listBeers(any(), any(), any(), any())).willReturn(Mono.just(beerPagedList));
 
         webTestClient.get()
                      .uri("/api/v1/beer")
