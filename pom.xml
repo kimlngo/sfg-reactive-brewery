@@ -11,7 +11,7 @@
 
     <groupId>guru.springframework</groupId>
     <artifactId>sfg-reactive-brewery</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>sfg-reactive-brewery</name>
 
     <description>SFG Reactive Brewery</description>
@@ -25,7 +25,7 @@
     </developers>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>21</java.version>
         <mapstruct.version>1.4.2.Final</mapstruct.version>
         <org.lombok.version>1.18.34</org.lombok.version>
         <!--set this to your docker acct name-->
@@ -43,9 +43,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
-        <dependency>
+<!--        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-r2dbc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -55,6 +59,10 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.r2dbc</groupId>
+            <artifactId>r2dbc-h2</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
