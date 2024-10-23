@@ -75,12 +75,12 @@ public class WebClientIT {
                                            .accept(MediaType.APPLICATION_JSON)
                                            .retrieve()
                                            .bodyToMono(BeerDto.class);
-
         StepVerifier.create(beerByUpc)
                     .assertNext(beerDto -> {
                         assertNotNull(beerDto);
                         assertEquals(BeerLoader.BEER_3_UPC, beerDto.getUpc());
-                    });
+                    })
+                    .verifyComplete();
     }
 
     @Test
