@@ -14,8 +14,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -75,17 +77,14 @@ public class BeerServiceImpl implements BeerService {
 
     @Cacheable(cacheNames = "beerCache", key = "#beerId", condition = "#showInventoryOnHand == false ")
     @Override
-    public BeerDto getById(UUID beerId, Boolean showInventoryOnHand) throws NotFoundException {
-//        if (showInventoryOnHand) {
-//            return beerMapper.beerToBeerDtoWithInventory(
-//                    beerRepository.findById(beerId).orElseThrow(NotFoundException::new)
-//            );
-//        } else {
-//            return beerMapper.beerToBeerDto(
-//                    beerRepository.findById(beerId).orElseThrow(NotFoundException::new)
-//            );
-//        }
-        return null;
+    public Mono<BeerDto> getById(Integer beerId, Boolean showInventoryOnHand) throws NotFoundException {
+        Function<Beer, BeerDto> mappingFunction = showInventoryOnHand ?
+                                                    beerMapper::beerToBeerDtoWithInventory :
+                                                    beerMapper::beerToBeerDto;
+
+        return beerRepository.findById(beerId)
+                             .map(mappingFunction)
+                             .switchIfEmpty(Mono.error(NotFoundException::new));
     }
 
     @Override
@@ -96,7 +95,7 @@ public class BeerServiceImpl implements BeerService {
 
 
     @Override
-    public BeerDto updateBeer(UUID beerId, BeerDto beerDto) {
+    public BeerDto updateBeer(Integer beerId, BeerDto beerDto) {
 //        Beer beer = beerRepository.findById(beerId)
 //                                  .orElseThrow(NotFoundException::new);
 //
@@ -111,12 +110,14 @@ public class BeerServiceImpl implements BeerService {
 
     @Cacheable(cacheNames = "beerUpcCache")
     @Override
-    public BeerDto getByUpc(String upc) {
-        return beerMapper.beerToBeerDto(beerRepository.findByUpc(upc));
+    public Mono<BeerDto> getByUpc(String upc) {
+        return beerRepository.findByUpc(upc)
+                .map(beerMapper::beerToBeerDto)
+                .switchIfEmpty(Mono.error(NotFoundException::new));
     }
 
     @Override
-    public void deleteBeerById(UUID beerId) {
+    public void deleteBeerById(Integer beerId) {
         beerRepository.deleteById(beerId);
     }
 }
