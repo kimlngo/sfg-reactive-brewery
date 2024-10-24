@@ -91,24 +91,35 @@ public class BeerServiceImpl implements BeerService {
     }
 
     @Override
-    public BeerDto saveNewBeer(BeerDto beerDto) {
-//        return beerMapper.beerToBeerDto(beerRepository.save(beerMapper.beerDtoToBeer(beerDto)));
-        return null;
+    public Mono<BeerDto> saveNewBeer(BeerDto beerDto) {
+        Mono<Beer> savedBeer = beerRepository.save(beerMapper.beerDtoToBeer(beerDto));
+        return savedBeer.map(beerMapper::beerToBeerDto);
     }
 
-
     @Override
-    public BeerDto updateBeer(Integer beerId, BeerDto beerDto) {
-//        Beer beer = beerRepository.findById(beerId)
-//                                  .orElseThrow(NotFoundException::new);
-//
-//        beer.setBeerName(beerDto.getBeerName());
-//        beer.setBeerStyle(BeerStyleEnum.PILSNER.valueOf(beerDto.getBeerStyle()));
-//        beer.setPrice(beerDto.getPrice());
-//        beer.setUpc(beerDto.getUpc());
-//
-//        return beerMapper.beerToBeerDto(beerRepository.save(beer));
-        return null;
+    public Mono<BeerDto> updateBeer(Integer beerId, BeerDto beerDto) {
+        return
+                beerRepository.findById(beerId)
+                              .defaultIfEmpty(Beer.builder()
+                                                  .build())
+                              .map(beer -> {
+                                  if (beer.getId() != null) {
+                                      beer.setBeerName(beerDto.getBeerName());
+                                      beer.setBeerStyle(BeerStyleEnum.valueOf(beerDto.getBeerStyle()));
+                                      beer.setPrice(beerDto.getPrice());
+                                      beer.setUpc(beerDto.getUpc());
+                                  }
+                                  return beer;
+                              })
+                              //.map(beerRepository::save) (using this will return Mono<Mono<Beer>> which is not useful
+                              //use flatMap to remove one layer of Mono
+                              .flatMap(beer -> {
+                                  if (beer.getId() != null) {
+                                      return beerRepository.save(beer);
+                                  }
+                                  return Mono.just(beer);
+                              }) //Mono<Beer> -> map -> Mono<BeerDto>
+                              .map(beerMapper::beerToBeerDto);
     }
 
     @Cacheable(cacheNames = "beerUpcCache")
@@ -121,6 +132,7 @@ public class BeerServiceImpl implements BeerService {
 
     @Override
     public void deleteBeerById(Integer beerId) {
-        beerRepository.deleteById(beerId);
+        beerRepository.deleteById(beerId)
+                      .subscribe();
     }
 }
