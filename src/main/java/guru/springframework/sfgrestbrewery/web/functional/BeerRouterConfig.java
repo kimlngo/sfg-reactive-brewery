@@ -21,6 +21,7 @@ public class BeerRouterConfig {
         return route().GET(API_V2_BEER_ID_PATH, accept(APPLICATION_JSON), handlerV2::getBeerById)
                       .GET(API_V2_BEER_UPC_PATH, accept(APPLICATION_JSON), handlerV2::getBeerByUpc)
                       .POST(API_V2_BEER, accept(APPLICATION_JSON), handlerV2::createNewBeer)
+                      .PUT(API_V2_BEER_ID_PATH, accept(APPLICATION_JSON), handlerV2::updateBeer)
                       .build();
     }
 }

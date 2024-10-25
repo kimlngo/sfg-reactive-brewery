@@ -42,9 +42,7 @@ public class BeerServiceImpl implements BeerService {
         Query query = buildQuery(beerName, beerStyle);
 
 
-        Function<Beer, BeerDto> mapFunction = showInventoryOnHand ?
-                beerMapper::beerToBeerDtoWithInventory :
-                beerMapper::beerToBeerDto;
+        Function<Beer, BeerDto> mapFunction = showInventoryOnHand ? beerMapper::beerToBeerDtoWithInventory : beerMapper::beerToBeerDto;
 
         return template.select(Beer.class)
                        .matching(query.with(pageRequest))
@@ -72,18 +70,13 @@ public class BeerServiceImpl implements BeerService {
     }
 
     private BeerPagedList convertBeersToPagedList(List<BeerDto> beers, PageRequest pageRequest) {
-        return new BeerPagedList(beers, PageRequest.of(
-                pageRequest.getPageNumber(),
-                pageRequest.getPageSize()),
-                beers.size());
+        return new BeerPagedList(beers, PageRequest.of(pageRequest.getPageNumber(), pageRequest.getPageSize()), beers.size());
     }
 
     @Cacheable(cacheNames = "beerCache", key = "#beerId", condition = "#showInventoryOnHand == false ")
     @Override
     public Mono<BeerDto> getById(Integer beerId, Boolean showInventoryOnHand) throws NotFoundException {
-        Function<Beer, BeerDto> mappingFunction = showInventoryOnHand ?
-                beerMapper::beerToBeerDtoWithInventory :
-                beerMapper::beerToBeerDto;
+        Function<Beer, BeerDto> mappingFunction = showInventoryOnHand ? beerMapper::beerToBeerDtoWithInventory : beerMapper::beerToBeerDto;
 
         return beerRepository.findById(beerId)
                              .map(mappingFunction)
@@ -105,28 +98,34 @@ public class BeerServiceImpl implements BeerService {
 
     @Override
     public Mono<BeerDto> updateBeer(Integer beerId, BeerDto beerDto) {
-        return
-                beerRepository.findById(beerId)
-                              .defaultIfEmpty(Beer.builder()
-                                                  .build())
-                              .map(beer -> {
-                                  if (beer.getId() != null) {
-                                      beer.setBeerName(beerDto.getBeerName());
-                                      beer.setBeerStyle(BeerStyleEnum.valueOf(beerDto.getBeerStyle()));
-                                      beer.setPrice(beerDto.getPrice());
-                                      beer.setUpc(beerDto.getUpc());
-                                  }
-                                  return beer;
-                              })
-                              //.map(beerRepository::save) (using this will return Mono<Mono<Beer>> which is not useful
-                              //use flatMap to remove one layer of Mono
-                              .flatMap(beer -> {
-                                  if (beer.getId() != null) {
-                                      return beerRepository.save(beer);
-                                  }
-                                  return Mono.just(beer);
-                              }) //Mono<Beer> -> map -> Mono<BeerDto>
-                              .map(beerMapper::beerToBeerDto);
+        return beerRepository.findById(beerId)
+                             .defaultIfEmpty(Beer.builder()
+                                                 .build())
+                             .map(beer -> {
+                                 if (beer.getId() != null) {
+                                     beer.setBeerName(beerDto.getBeerName());
+                                     beer.setBeerStyle(BeerStyleEnum.valueOf(beerDto.getBeerStyle()));
+                                     beer.setPrice(beerDto.getPrice());
+                                     beer.setUpc(beerDto.getUpc());
+                                 }
+                                 return beer;
+                             })
+                             //.map(beerRepository::save) (using this will return Mono<Mono<Beer>> which is not useful
+                             //use flatMap to remove one layer of Mono
+                             .flatMap(beer -> {
+                                 if (beer.getId() != null) {
+                                     return beerRepository.save(beer);
+                                 }
+                                 return Mono.just(beer);
+                             }) //Mono<Beer> -> map -> Mono<BeerDto>
+                             .map(beerMapper::beerToBeerDto);
+    }
+
+    @Override
+    public Mono<BeerDto> updateBeerMono(Integer beerId, Mono<BeerDto> beerDto) {
+        return beerDto
+                //.map(dto -> updateBeer(beerId, dto)); will return Mono<Mono<BeerDto>>
+                .flatMap(dto -> updateBeer(beerId, dto)); //will return Mono<BeerDto>
     }
 
     @Cacheable(cacheNames = "beerUpcCache")

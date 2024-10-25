@@ -20,11 +20,12 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class BeerHandlerV2 {
     private static final String LOCATION_PATH = "http://localhost:8080/api/v2/beer/";
+    private static final String BEER_ID = "beerId";
     private final BeerService beerService;
     private final Validator validator;
 
     public Mono<ServerResponse> getBeerById(ServerRequest request) {
-        Integer beerId = Integer.valueOf(request.pathVariable("beerId"));
+        Integer beerId = Integer.valueOf(request.pathVariable(BEER_ID));
         Boolean showInventory = Boolean.valueOf((request.queryParam("showInventory")
                                                         .orElse("false")));
 
@@ -64,5 +65,19 @@ public class BeerHandlerV2 {
         if (errors.hasErrors()) {
             throw new ServerWebInputException(errors.toString());
         }
+    }
+
+    public Mono<ServerResponse> updateBeer(ServerRequest request) {
+        Integer beerId = Integer.valueOf(request.pathVariable(BEER_ID));
+        Mono<BeerDto> beerDtoMono = request.bodyToMono(BeerDto.class)
+                                           .doOnNext(this::validate);
+
+        return beerService.updateBeerMono(beerId, beerDtoMono)
+                          .flatMap(beerDto -> {
+                              if (beerDto.getId() != null)
+                                  return ServerResponse.noContent().build();
+                              else
+                                  return ServerResponse.notFound().build();
+                          });
     }
 }

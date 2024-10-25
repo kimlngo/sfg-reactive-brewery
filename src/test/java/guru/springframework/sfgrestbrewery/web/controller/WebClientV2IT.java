@@ -3,6 +3,7 @@ package guru.springframework.sfgrestbrewery.web.controller;
 import guru.springframework.sfgrestbrewery.bootstrap.BeerLoader;
 import guru.springframework.sfgrestbrewery.web.model.BeerDto;
 import guru.springframework.sfgrestbrewery.web.model.BeerPagedList;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 public class WebClientV2IT {
     private static final String BASE_URL = "http://localhost:8080";
@@ -95,7 +97,7 @@ public class WebClientV2IT {
                  .retrieve()
                  .bodyToMono(BeerDto.class)
                  .subscribe(response -> {
-                 }, throwable -> count.countDown() );
+                 }, throwable -> count.countDown());
 
         count.await(1000, TimeUnit.MILLISECONDS);
         assertEquals(0, count.getCount());
@@ -141,18 +143,23 @@ public class WebClientV2IT {
                                  .price(new BigDecimal("8.99"))
                                  .build();
 
-        Mono<ResponseEntity<Void>> beerResponseMono = webClient.post().uri("/api/v2/beer")
-                                                               .accept(MediaType.APPLICATION_JSON).body(BodyInserters.fromValue(beerDto))
-                                                               .retrieve().toBodilessEntity();
+        Mono<ResponseEntity<Void>> beerResponseMono = webClient.post()
+                                                               .uri("/api/v2/beer")
+                                                               .accept(MediaType.APPLICATION_JSON)
+                                                               .body(BodyInserters.fromValue(beerDto))
+                                                               .retrieve()
+                                                               .toBodilessEntity();
 
         beerResponseMono.subscribe(responseEntity -> {
 
         }, throwable -> {
             if ("org.springframework.web.reactive.function.client.WebClientResponseException$BadRequest"
-                    .equals(throwable.getClass().getName())){
+                    .equals(throwable.getClass()
+                                     .getName())) {
                 WebClientResponseException ex = (WebClientResponseException) throwable;
 
-                if (ex.getStatusCode().equals(HttpStatus.BAD_REQUEST)){
+                if (ex.getStatusCode()
+                      .equals(HttpStatus.BAD_REQUEST)) {
                     countDownLatch.countDown();
                 }
             }
@@ -185,22 +192,18 @@ public class WebClientV2IT {
         countDownLatch.await();
     }
 
-    //@Test
+    @Test
     void testUpdateBeer() throws InterruptedException {
         CountDownLatch countDownLatch = new CountDownLatch(3);
 
         webClient.get()
-                 .uri("/api/v1/beer")
+                 .uri("/api/v2/beer/1")
                  .accept(MediaType.APPLICATION_JSON)
                  .retrieve()
-                 .bodyToMono(BeerPagedList.class)
+                 .bodyToMono(BeerDto.class)
                  .publishOn(Schedulers.single())
-                 .subscribe(pagedList -> {
+                 .subscribe(beerDto -> {
                      countDownLatch.countDown();
-
-                     //get existing beer
-                     BeerDto beerDto = pagedList.getContent()
-                                                .get(0);
 
                      BeerDto updatePayload = BeerDto.builder()
                                                     .beerName("JTsUpdate")
@@ -211,7 +214,7 @@ public class WebClientV2IT {
 
                      //update existing beer
                      webClient.put()
-                              .uri("/api/v1/beer/" + beerDto.getId())
+                              .uri("/api/v2/beer/" + beerDto.getId())
                               .contentType(MediaType.APPLICATION_JSON)
                               .body(BodyInserters.fromValue(updatePayload))
                               .retrieve()
@@ -220,7 +223,7 @@ public class WebClientV2IT {
                                   //get and verify update
                                   countDownLatch.countDown();
                                   return webClient.get()
-                                                  .uri("/api/v1/beer/" + beerDto.getId())
+                                                  .uri("/api/v2/beer/" + beerDto.getId())
                                                   .accept(MediaType.APPLICATION_JSON)
                                                   .retrieve()
                                                   .bodyToMono(BeerDto.class);
@@ -235,11 +238,11 @@ public class WebClientV2IT {
         assertEquals(0, countDownLatch.getCount());
     }
 
-    //@Test
+    @Test
     void testUpdateBeer_NotFound() throws InterruptedException {
-
         CountDownLatch countDownLatch = new CountDownLatch(2);
-
+        Integer randomId = (int) (Math.random() * Math.pow(10, 6));
+        log.debug("randomId = {}", randomId);
         BeerDto updatePayload = BeerDto.builder()
                                        .beerName("JTsUpdate")
                                        .beerStyle("PALE_ALE")
@@ -248,7 +251,7 @@ public class WebClientV2IT {
                                        .build();
 
         webClient.put()
-                 .uri("/api/v1/beer/" + 200)
+                 .uri("/api/v2/beer/" + randomId)
                  .contentType(MediaType.APPLICATION_JSON)
                  .body(BodyInserters.fromValue(updatePayload))
                  .retrieve()

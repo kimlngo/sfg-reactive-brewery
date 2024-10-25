@@ -23,6 +23,8 @@ public interface BeerService {
 
     Mono<BeerDto> updateBeer(Integer beerId, BeerDto beerDto);
 
+    Mono<BeerDto> updateBeerMono(Integer beerId, Mono<BeerDto> beerDto);
+
     Mono<BeerDto> getByUpc(String upc);
 
     void deleteBeerById(Integer beerId);
