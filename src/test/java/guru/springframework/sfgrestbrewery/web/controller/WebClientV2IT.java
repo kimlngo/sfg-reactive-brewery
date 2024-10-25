@@ -31,6 +31,7 @@ public class WebClientV2IT {
     private static final String BASE_URL = "http://localhost:8080";
     private static final String BEER_V2_PATH = "api/v2/beer";
     private static final String BEER_V2_UPC_PATH = "api/v2/beerUpc";
+    private static final String NOT_FOUND_EXCEPTION = "org.springframework.web.reactive.function.client.WebClientResponseException$NotFound";
 
     WebClient webClient;
 
@@ -101,7 +102,6 @@ public class WebClientV2IT {
 
         count.await(1000, TimeUnit.MILLISECONDS);
         assertEquals(0, count.getCount());
-
     }
 
     @Test
@@ -258,7 +258,7 @@ public class WebClientV2IT {
                  .toBodilessEntity()
                  .subscribe(responseEntity -> {
                  }, throwable -> {
-                     if ("org.springframework.web.reactive.function.client.WebClientResponseException$NotFound"
+                     if (NOT_FOUND_EXCEPTION
                              .equals(throwable.getClass()
                                               .getName())) {
                          WebClientResponseException ex = (WebClientResponseException) throwable;
@@ -276,44 +276,42 @@ public class WebClientV2IT {
         assertEquals(0, countDownLatch.getCount());
     }
 
-    //@Test
-    void testDeleteBeer() throws InterruptedException {
+    @Test
+    void testDeleteBeer() {
+        //Delete the beer first, assert status 2xx
+        Integer beerId = Integer.valueOf(1);
+        Mono<ResponseEntity<Void>> deleteBeerMono = webClient.delete()
+                                                             .uri("/api/v2/beer/" + beerId)
+                                                             .retrieve()
+                                                             .toBodilessEntity();
+        StepVerifier.create(deleteBeerMono)
+                    .assertNext(res -> assertTrue(res.getStatusCode().is2xxSuccessful()))
+                    .verifyComplete();
 
-        CountDownLatch countDownLatch = new CountDownLatch(3);
+        //Get the beer with same id again and assert NotFound
+        Mono<BeerDto> readBeerAgain = webClient.get()
+                                               .uri("/api/v2/beer/" + beerId)
+                                               .accept(MediaType.APPLICATION_JSON)
+                                               .retrieve()
+                                               .bodyToMono(BeerDto.class);
 
-        webClient.get()
-                 .uri("/api/v1/beer")
-                 .accept(MediaType.APPLICATION_JSON)
-                 .retrieve()
-                 .bodyToMono(BeerPagedList.class)
-                 .publishOn(Schedulers.single())
-                 .subscribe(pagedList -> {
-                     countDownLatch.countDown();
+        StepVerifier.create(readBeerAgain)
+                    .expectErrorMatches(throwable -> throwable instanceof WebClientResponseException t &&
+                            NOT_FOUND_EXCEPTION.equals(t.getClass().getName()))
+                    .verify();
+    }
 
-                     BeerDto beerDto = pagedList.getContent()
-                                                .get(0);
+    @Test
+    void testDeleteBeer_NotFound() {
+        Integer invalidBeerId = Integer.valueOf(1000);
+        Mono<ResponseEntity<Void>> monoResponse = webClient.delete()
+                                                           .uri("/api/v2/beer/" + invalidBeerId)
+                                                           .retrieve()
+                                                           .toBodilessEntity();
 
-                     webClient.delete()
-                              .uri("/api/v1/beer/" + beerDto.getId())
-                              .retrieve()
-                              .toBodilessEntity()
-                              .flatMap(responseEntity -> {
-                                  countDownLatch.countDown();
-
-                                  return webClient.get()
-                                                  .uri("/api/v1/beer/" + beerDto.getId())
-                                                  .accept(MediaType.APPLICATION_JSON)
-                                                  .retrieve()
-                                                  .bodyToMono(BeerDto.class);
-                              })
-                              .subscribe(savedDto -> {
-
-                              }, throwable -> {
-                                  countDownLatch.countDown();
-                              });
-                 });
-
-        countDownLatch.await(1000, TimeUnit.MILLISECONDS);
-        assertEquals(0, countDownLatch.getCount());
+        StepVerifier.create(monoResponse)
+                    .expectErrorMatches(throwable -> throwable instanceof WebClientResponseException t &&
+                            NOT_FOUND_EXCEPTION.equals(t.getClass().getName()))
+                    .verify();
     }
 }

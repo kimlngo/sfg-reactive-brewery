@@ -2,6 +2,7 @@ package guru.springframework.sfgrestbrewery.web.functional;
 
 
 import guru.springframework.sfgrestbrewery.services.BeerService;
+import guru.springframework.sfgrestbrewery.web.controller.NotFoundException;
 import guru.springframework.sfgrestbrewery.web.model.BeerDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,25 +26,26 @@ public class BeerHandlerV2 {
     private final Validator validator;
 
     public Mono<ServerResponse> getBeerById(ServerRequest request) {
-        Integer beerId = Integer.valueOf(request.pathVariable(BEER_ID));
         Boolean showInventory = Boolean.valueOf((request.queryParam("showInventory")
                                                         .orElse("false")));
 
-        return beerService.getById(beerId, showInventory)
+        return beerService.getById(getBeerId(request), showInventory)
+                          .switchIfEmpty(Mono.error(NotFoundException::new))
                           .flatMap(beerDto -> ServerResponse.ok()
                                                             .bodyValue(beerDto))
-                          .switchIfEmpty(ServerResponse.notFound()
-                                                       .build());
+                          .onErrorResume(e -> ServerResponse.notFound()
+                                                            .build());
     }
 
     public Mono<ServerResponse> getBeerByUpc(ServerRequest request) {
         String upc = request.pathVariable("upc");
 
         return beerService.getByUpc(upc)
+                          .switchIfEmpty(Mono.error(NotFoundException::new))
                           .flatMap(beerDto -> ServerResponse.ok()
                                                             .bodyValue(beerDto))
-                          .switchIfEmpty(ServerResponse.notFound()
-                                                       .build());
+                          .onErrorResume(e -> ServerResponse.notFound()
+                                                            .build());
     }
 
     public Mono<ServerResponse> createNewBeer(ServerRequest request) {
@@ -68,16 +70,27 @@ public class BeerHandlerV2 {
     }
 
     public Mono<ServerResponse> updateBeer(ServerRequest request) {
-        Integer beerId = Integer.valueOf(request.pathVariable(BEER_ID));
         Mono<BeerDto> beerDtoMono = request.bodyToMono(BeerDto.class)
                                            .doOnNext(this::validate);
 
-        return beerService.updateBeerMono(beerId, beerDtoMono)
+        return beerService.updateBeerMono(getBeerId(request), beerDtoMono)
                           .flatMap(beerDto -> {
                               if (beerDto.getId() != null)
                                   return ServerResponse.noContent().build();
                               else
                                   return ServerResponse.notFound().build();
                           });
+    }
+
+    public Mono<ServerResponse> deleteBeer(ServerRequest request) {
+        return beerService.reactiveDeleteById(getBeerId(request))
+                          .flatMap(voidMono -> ServerResponse.noContent()
+                                                             .build())
+                          .onErrorResume(e -> e instanceof NotFoundException, e -> ServerResponse.notFound()
+                                                                                                 .build());
+    }
+
+    private Integer getBeerId(ServerRequest req) {
+        return Integer.valueOf(req.pathVariable(BEER_ID));
     }
 }
