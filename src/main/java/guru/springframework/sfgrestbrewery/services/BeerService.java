@@ -1,5 +1,6 @@
 package guru.springframework.sfgrestbrewery.services;
 
+import guru.springframework.sfgrestbrewery.domain.Beer;
 import guru.springframework.sfgrestbrewery.web.model.BeerDto;
 import guru.springframework.sfgrestbrewery.web.model.BeerPagedList;
 import guru.springframework.sfgrestbrewery.web.model.BeerStyleEnum;
@@ -17,6 +18,8 @@ public interface BeerService {
     Mono<BeerDto> getById(Integer beerId, Boolean showInventoryOnHand);
 
     Mono<BeerDto> saveNewBeer(BeerDto beerDto);
+
+    Mono<BeerDto> saveNewBeerMono(Mono<BeerDto> beerDtoMono);
 
     Mono<BeerDto> updateBeer(Integer beerId, BeerDto beerDto);
 

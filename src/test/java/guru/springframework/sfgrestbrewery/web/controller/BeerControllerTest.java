@@ -43,6 +43,7 @@ class BeerControllerTest {
     @BeforeEach
     void setUp() {
         validBeer = BeerDto.builder()
+                           .id(1)
                            .beerName("Test Beer")
                            .beerStyle("PALE_ALE")
                            .upc(BeerLoader.BEER_3_UPC)
@@ -53,10 +54,6 @@ class BeerControllerTest {
     void testGetBeerById() {
         given(beerService.getById(any(), any())).willReturn(Mono.just(validBeer));
 
-        WebTestClient.ResponseSpec exchange = webTestClient.get()
-                                                           .uri("/api/v1/beer/1")
-                                                           .accept(MediaType.APPLICATION_JSON)
-                                                           .exchange();
         webTestClient.get()
                      .uri("/api/v1/beer/1")
                      .accept(MediaType.APPLICATION_JSON)

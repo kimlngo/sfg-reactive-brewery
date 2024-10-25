@@ -97,6 +97,13 @@ public class BeerServiceImpl implements BeerService {
     }
 
     @Override
+    public Mono<BeerDto> saveNewBeerMono(Mono<BeerDto> beerDtoMono) {
+        return beerDtoMono.map(beerMapper::beerDtoToBeer)
+                          .flatMap(beerRepository::save)
+                          .map(beerMapper::beerToBeerDto);
+    }
+
+    @Override
     public Mono<BeerDto> updateBeer(Integer beerId, BeerDto beerDto) {
         return
                 beerRepository.findById(beerId)

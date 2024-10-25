@@ -57,16 +57,14 @@ public class BeerController {
         if (showInventoryOnHand == null) {
             showInventoryOnHand = false;
         }
-
         return ResponseEntity.ok(beerService.getById(beerId, showInventoryOnHand)
                                             .defaultIfEmpty(BeerDto.builder()
-                                                                   .build())
+                                                                      .build())
                                             .doOnNext(beerDto -> {
-                                                if (beerDto.getId() == null) {
-                                                    throw new NotFoundException();
-                                                }
-                                            })
-        );
+                                                   if (beerDto.getId() == null) {
+                                                       throw new NotFoundException();
+                                                   }
+                                               }));
     }
 
     @GetMapping("beerUpc/{upc}")
