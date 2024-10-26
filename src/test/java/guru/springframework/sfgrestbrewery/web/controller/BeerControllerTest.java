@@ -10,9 +10,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
@@ -21,13 +21,10 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Random;
-import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
-//@WebFluxTest(BeerController.class)
 @SpringBootTest
 @AutoConfigureWebTestClient
 class BeerControllerTest {
@@ -98,7 +95,8 @@ class BeerControllerTest {
                                .quantityOnHand(new Random().nextInt(5000))
                                .build();
 
-        BeerPagedList beerPagedList = new BeerPagedList(List.of(beer1, beer2));
+        List<BeerDto> beerDtoList = List.of(beer1, beer2);
+        BeerPagedList beerPagedList = new BeerPagedList(beerDtoList, PageRequest.of(0, 10), beerDtoList.size());
 
         given(beerService.listBeers(any(), any(), any(), any())).willReturn(Mono.just(beerPagedList));
 
