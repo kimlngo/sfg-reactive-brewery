@@ -30,22 +30,16 @@ public class BeerHandlerV2 {
                                                         .orElse("false")));
 
         return beerService.getById(getBeerId(request), showInventory)
-                          .switchIfEmpty(Mono.error(NotFoundException::new))
-                          .flatMap(beerDto -> ServerResponse.ok()
-                                                            .bodyValue(beerDto))
-                          .onErrorResume(e -> ServerResponse.notFound()
-                                                            .build());
+                          .flatMap(beerDto -> ServerResponse.ok().bodyValue(beerDto))
+                          .onErrorResume(e -> ServerResponse.notFound().build());
     }
 
     public Mono<ServerResponse> getBeerByUpc(ServerRequest request) {
         String upc = request.pathVariable("upc");
 
         return beerService.getByUpc(upc)
-                          .switchIfEmpty(Mono.error(NotFoundException::new))
-                          .flatMap(beerDto -> ServerResponse.ok()
-                                                            .bodyValue(beerDto))
-                          .onErrorResume(e -> ServerResponse.notFound()
-                                                            .build());
+                          .flatMap(beerDto -> ServerResponse.ok().bodyValue(beerDto))
+                          .onErrorResume(e -> ServerResponse.notFound().build());
     }
 
     public Mono<ServerResponse> createNewBeer(ServerRequest request) {
@@ -74,20 +68,15 @@ public class BeerHandlerV2 {
                                            .doOnNext(this::validate);
 
         return beerService.updateBeerMono(getBeerId(request), beerDtoMono)
-                          .flatMap(beerDto -> {
-                              if (beerDto.getId() != null)
-                                  return ServerResponse.noContent().build();
-                              else
-                                  return ServerResponse.notFound().build();
-                          });
+                          .flatMap(beerDto -> beerDto.getId() != null ?
+                                  ServerResponse.noContent().build() :
+                                  ServerResponse.notFound().build());
     }
 
     public Mono<ServerResponse> deleteBeer(ServerRequest request) {
         return beerService.reactiveDeleteById(getBeerId(request))
-                          .flatMap(voidMono -> ServerResponse.noContent()
-                                                             .build())
-                          .onErrorResume(e -> e instanceof NotFoundException, e -> ServerResponse.notFound()
-                                                                                                 .build());
+                          .flatMap(voidMono -> ServerResponse.noContent().build())
+                          .onErrorResume(e -> ServerResponse.notFound().build());
     }
 
     private Integer getBeerId(ServerRequest req) {

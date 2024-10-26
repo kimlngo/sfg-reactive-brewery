@@ -79,8 +79,8 @@ public class BeerServiceImpl implements BeerService {
         Function<Beer, BeerDto> mappingFunction = showInventoryOnHand ? beerMapper::beerToBeerDtoWithInventory : beerMapper::beerToBeerDto;
 
         return beerRepository.findById(beerId)
-                             .map(mappingFunction)
-                             .switchIfEmpty(Mono.error(NotFoundException::new));
+                             .switchIfEmpty(Mono.error(NotFoundException::new))
+                             .map(mappingFunction);
     }
 
     @Override
@@ -101,15 +101,7 @@ public class BeerServiceImpl implements BeerService {
         return beerRepository.findById(beerId)
                              .defaultIfEmpty(Beer.builder()
                                                  .build())
-                             .map(beer -> {
-                                 if (beer.getId() != null) {
-                                     beer.setBeerName(beerDto.getBeerName());
-                                     beer.setBeerStyle(BeerStyleEnum.valueOf(beerDto.getBeerStyle()));
-                                     beer.setPrice(beerDto.getPrice());
-                                     beer.setUpc(beerDto.getUpc());
-                                 }
-                                 return beer;
-                             })
+                             .map(beer -> transferDtoToBeer(beer, beerDto))
                              //.map(beerRepository::save) (using this will return Mono<Mono<Beer>> which is not useful
                              //use flatMap to remove one layer of Mono
                              .flatMap(beer -> {
@@ -119,6 +111,16 @@ public class BeerServiceImpl implements BeerService {
                                  return Mono.just(beer);
                              }) //Mono<Beer> -> map -> Mono<BeerDto>
                              .map(beerMapper::beerToBeerDto);
+    }
+
+    private Beer transferDtoToBeer(Beer beer, BeerDto beerDto) {
+        if (beer.getId() != null) {
+            beer.setBeerName(beerDto.getBeerName());
+            beer.setBeerStyle(BeerStyleEnum.valueOf(beerDto.getBeerStyle()));
+            beer.setPrice(beerDto.getPrice());
+            beer.setUpc(beerDto.getUpc());
+        }
+        return beer;
     }
 
     @Override
@@ -132,8 +134,8 @@ public class BeerServiceImpl implements BeerService {
     @Override
     public Mono<BeerDto> getByUpc(String upc) {
         return beerRepository.findByUpc(upc)
-                             .map(beerMapper::beerToBeerDto)
-                             .switchIfEmpty(Mono.error(NotFoundException::new));
+                             .switchIfEmpty(Mono.error(NotFoundException::new))
+                             .map(beerMapper::beerToBeerDto);
     }
 
     @Override

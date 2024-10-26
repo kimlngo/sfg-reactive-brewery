@@ -48,8 +48,7 @@ public class BeerController {
 
     @ExceptionHandler
     ResponseEntity<Void> handleNotFound(NotFoundException exception) {
-        return ResponseEntity.notFound()
-                             .build();
+        return ResponseEntity.notFound().build();
     }
 
     @GetMapping("beer/{beerId}")
@@ -58,8 +57,7 @@ public class BeerController {
             showInventoryOnHand = false;
         }
         return ResponseEntity.ok(beerService.getById(beerId, showInventoryOnHand)
-                                            .defaultIfEmpty(BeerDto.builder()
-                                                                      .build())
+                                            .defaultIfEmpty(BeerDto.builder().build())
                                             .doOnNext(beerDto -> {
                                                    if (beerDto.getId() == null) {
                                                        throw new NotFoundException();
@@ -70,8 +68,7 @@ public class BeerController {
     @GetMapping("beerUpc/{upc}")
     public ResponseEntity<Mono<BeerDto>> getBeerByUpc(@PathVariable("upc") String upc) {
         return ResponseEntity.ok(beerService.getByUpc(upc)
-                                            .defaultIfEmpty(BeerDto.builder()
-                                                                   .build())
+                                            .defaultIfEmpty(BeerDto.builder().build())
                                             .doOnNext(beerDto -> {
                                                 if (beerDto.getId() == null) {
                                                     throw new NotFoundException();
