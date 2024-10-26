@@ -2,7 +2,6 @@ package guru.springframework.sfgrestbrewery.web.controller;
 
 import guru.springframework.sfgrestbrewery.bootstrap.BeerLoader;
 import guru.springframework.sfgrestbrewery.web.model.BeerDto;
-import guru.springframework.sfgrestbrewery.web.model.BeerPagedList;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,13 +14,11 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.client.HttpClient;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -32,7 +29,7 @@ public class WebClientV2IT {
     private static final String BEER_V2_PATH = "api/v2/beer";
     private static final String BEER_V2_UPC_PATH = "api/v2/beerUpc";
     private static final String NOT_FOUND_EXCEPTION = "org.springframework.web.reactive.function.client.WebClientResponseException$NotFound";
-
+    private static final String BAD_REQ_EXCEPTION = "org.springframework.web.reactive.function.client.WebClientResponseException$BadRequest";
     WebClient webClient;
 
     @BeforeEach
@@ -42,6 +39,23 @@ public class WebClientV2IT {
                              .clientConnector(new ReactorClientHttpConnector(HttpClient.create()
                                                                                        .wiretap(true)))
                              .build();
+    }
+
+    /**
+     * @param throwable
+     * @return true if throwable is an instance of NotFound Exception
+     */
+    private boolean assertExceptionThrown(Throwable throwable, String expectedErrorName) {
+        return throwable instanceof WebClientResponseException t &&
+                expectedErrorName.equals(t.getClass().getName());
+    }
+
+    private Mono<BeerDto> getBeerDtoMono(Integer id) {
+        return webClient.get()
+                        .uri(BEER_V2_PATH + "/" + id)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .retrieve()
+                        .bodyToMono(BeerDto.class);
     }
 
     @Test
@@ -63,12 +77,13 @@ public class WebClientV2IT {
         Mono<BeerDto> beerDtoMono = getBeerDtoMono(1000);
 
         StepVerifier.create(beerDtoMono)
-                    .expectError(NotFoundException.class);
+                    .expectErrorMatches(t -> assertExceptionThrown(t, NOT_FOUND_EXCEPTION))
+                    .verify();
     }
 
-    private Mono<BeerDto> getBeerDtoMono(Integer id) {
+    private Mono<BeerDto> getBeerByUpcMono(String upc) {
         return webClient.get()
-                        .uri(BEER_V2_PATH + "/" + id)
+                        .uri(BEER_V2_UPC_PATH + "/" + upc)
                         .accept(MediaType.APPLICATION_JSON)
                         .retrieve()
                         .bodyToMono(BeerDto.class);
@@ -76,11 +91,8 @@ public class WebClientV2IT {
 
     @Test
     void testGetBeerByUpc() {
-        Mono<BeerDto> beerByUpc = webClient.get()
-                                           .uri(BEER_V2_UPC_PATH + "/" + BeerLoader.BEER_3_UPC)
-                                           .accept(MediaType.APPLICATION_JSON)
-                                           .retrieve()
-                                           .bodyToMono(BeerDto.class);
+        Mono<BeerDto> beerByUpc = getBeerByUpcMono(BeerLoader.BEER_3_UPC);
+
         StepVerifier.create(beerByUpc)
                     .assertNext(beerDto -> {
                         assertNotNull(beerDto);
@@ -90,190 +102,127 @@ public class WebClientV2IT {
     }
 
     @Test
-    void testGetBeerByUpc_NotFound() throws InterruptedException {
-        CountDownLatch count = new CountDownLatch(1);
-        webClient.get()
-                 .uri(BEER_V2_UPC_PATH + "/" + System.currentTimeMillis())
-                 .accept(MediaType.APPLICATION_JSON)
-                 .retrieve()
-                 .bodyToMono(BeerDto.class)
-                 .subscribe(response -> {
-                 }, throwable -> count.countDown());
+    void testGetBeerByUpc_NotFound() {
+        Mono<BeerDto> beerDtoMono = getBeerByUpcMono(String.valueOf(System.currentTimeMillis()));
 
-        count.await(1000, TimeUnit.MILLISECONDS);
-        assertEquals(0, count.getCount());
+        StepVerifier.create(beerDtoMono)
+                    .expectErrorMatches(t -> assertExceptionThrown(t, NOT_FOUND_EXCEPTION))
+                    .verify();
+    }
+
+    private BeerDto createBeerDtoBody() {
+        return BeerDto.builder()
+                      .beerName("Heineken")
+                      .beerStyle("LAGER")
+                      .upc("1729369216")
+                      .quantityOnHand(100)
+                      .price(BigDecimal.valueOf(10))
+                      .build();
     }
 
     @Test
-    void testCreateNewBeer() throws InterruptedException {
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-        BeerDto beerDto = BeerDto.builder()
-                                 .beerName("Heineken")
-                                 .beerStyle("LAGER")
-                                 .upc("1729369216")
-                                 .quantityOnHand(100)
-                                 .price(BigDecimal.valueOf(10))
-                                 .build();
-        Mono<ResponseEntity<Void>> beerDtoMono = webClient.post()
-                                                          .uri("/api/v2/beer")
-                                                          .accept(MediaType.APPLICATION_JSON)
-                                                          .body(BodyInserters.fromValue(beerDto))
-                                                          .retrieve()
-                                                          .toBodilessEntity();
+    void testCreateNewBeer() {
+        BeerDto beerDto = createBeerDtoBody();
+        Mono<ResponseEntity<Void>> response = webClient.post()
+                                                       .uri("/api/v2/beer")
+                                                       .accept(MediaType.APPLICATION_JSON)
+                                                       .body(BodyInserters.fromValue(beerDto))
+                                                       .retrieve()
+                                                       .toBodilessEntity();
 
-        beerDtoMono.publishOn(Schedulers.parallel())
-                   .subscribe(responseEntity -> {
+        Optional<String> location = Optional.ofNullable(response.block()
+                                                                .getHeaders()
+                                                                .get("Location")
+                                                                .get(0));
+        String[] items = location.get()
+                                 .split("/");
+        Integer id = Integer.parseInt(items[items.length - 1]);
+        log.debug("id: {}", id);
 
-                       assertTrue(responseEntity.getStatusCode()
-                                                .is2xxSuccessful());
+        Mono<BeerDto> beerDtoMono = getBeerDtoMono(id);
 
-                       countDownLatch.countDown();
-                   });
-
-        countDownLatch.await(1000, TimeUnit.MILLISECONDS);
-        assertEquals(0, countDownLatch.getCount());
+        StepVerifier.create(beerDtoMono)
+                    .assertNext(actual -> {
+                        assertNotNull(actual);
+                        assertEquals(id, actual.getId());
+                        assertEquals(beerDto.getBeerName(), actual.getBeerName());
+                        assertEquals(beerDto.getBeerStyle(), actual.getBeerStyle());
+                        assertEquals(beerDto.getUpc(), actual.getUpc());
+                    })
+                    .verifyComplete();
     }
 
     @Test
-    void testCreateBeerBadRequest() throws InterruptedException {
-
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-
-        BeerDto beerDto = BeerDto.builder()
-                                 .price(new BigDecimal("8.99"))
-                                 .build();
+    void testCreateBeerBadRequest() {
+        BeerDto invalidBeerDto = BeerDto.builder()
+                                        .price(new BigDecimal("8.99"))
+                                        .build();
 
         Mono<ResponseEntity<Void>> beerResponseMono = webClient.post()
                                                                .uri("/api/v2/beer")
                                                                .accept(MediaType.APPLICATION_JSON)
-                                                               .body(BodyInserters.fromValue(beerDto))
+                                                               .body(BodyInserters.fromValue(invalidBeerDto))
                                                                .retrieve()
                                                                .toBodilessEntity();
 
-        beerResponseMono.subscribe(responseEntity -> {
+        StepVerifier.create(beerResponseMono)
+                    .expectErrorMatches(t -> assertExceptionThrown(t, BAD_REQ_EXCEPTION))
+                    .verify();
 
-        }, throwable -> {
-            if ("org.springframework.web.reactive.function.client.WebClientResponseException$BadRequest"
-                    .equals(throwable.getClass()
-                                     .getName())) {
-                WebClientResponseException ex = (WebClientResponseException) throwable;
-
-                if (ex.getStatusCode()
-                      .equals(HttpStatus.BAD_REQUEST)) {
-                    countDownLatch.countDown();
-                }
-            }
-        });
-
-        countDownLatch.await(2000, TimeUnit.MILLISECONDS);
-        assertEquals(0, countDownLatch.getCount());
     }
 
-    //@Test
-    void testListBeers() throws InterruptedException {
-
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-
-        Mono<BeerPagedList> beerPagedListMono = webClient.get()
-                                                         .uri("/api/v1/beer")
-                                                         .accept(MediaType.APPLICATION_JSON)
-                                                         .retrieve()
-                                                         .bodyToMono(BeerPagedList.class);
-
-        beerPagedListMono.publishOn(Schedulers.parallel())
-                         .subscribe(beerPagedList -> {
-
-                             beerPagedList.getContent()
-                                          .forEach(beerDto -> System.out.println(beerDto.toString()));
-
-                             countDownLatch.countDown();
-                         });
-
-        countDownLatch.await();
+    private Mono<ResponseEntity<Void>> updateBeerDto(Integer id, BeerDto payload) {
+        return webClient.put()
+                        .uri("/api/v2/beer/" + id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(BodyInserters.fromValue(payload))
+                        .retrieve()
+                        .toBodilessEntity();
     }
 
     @Test
-    void testUpdateBeer() throws InterruptedException {
-        CountDownLatch countDownLatch = new CountDownLatch(3);
-
-        webClient.get()
-                 .uri("/api/v2/beer/1")
-                 .accept(MediaType.APPLICATION_JSON)
-                 .retrieve()
-                 .bodyToMono(BeerDto.class)
-                 .publishOn(Schedulers.single())
-                 .subscribe(beerDto -> {
-                     countDownLatch.countDown();
-
-                     BeerDto updatePayload = BeerDto.builder()
-                                                    .beerName("JTsUpdate")
-                                                    .beerStyle(beerDto.getBeerStyle())
-                                                    .upc(beerDto.getUpc())
-                                                    .price(beerDto.getPrice())
-                                                    .build();
-
-                     //update existing beer
-                     webClient.put()
-                              .uri("/api/v2/beer/" + beerDto.getId())
-                              .contentType(MediaType.APPLICATION_JSON)
-                              .body(BodyInserters.fromValue(updatePayload))
-                              .retrieve()
-                              .toBodilessEntity()
-                              .flatMap(responseEntity -> {
-                                  //get and verify update
-                                  countDownLatch.countDown();
-                                  return webClient.get()
-                                                  .uri("/api/v2/beer/" + beerDto.getId())
+    void testUpdateBeer() {
+        Integer id = Integer.valueOf(1);
+        String newName = "Hello New World";
+        Mono<BeerDto> beerToUpdateMono = webClient.get()
+                                                  .uri("/api/v2/beer/" + id)
                                                   .accept(MediaType.APPLICATION_JSON)
                                                   .retrieve()
                                                   .bodyToMono(BeerDto.class);
-                              })
-                              .subscribe(savedDto -> {
-                                  assertEquals("JTsUpdate", savedDto.getBeerName());
-                                  countDownLatch.countDown();
-                              });
-                 });
+        BeerDto beerToUpdate = beerToUpdateMono.block();
+        beerToUpdate.setId(null);
+        beerToUpdate.setBeerName(newName);
 
-        countDownLatch.await(1000, TimeUnit.MILLISECONDS);
-        assertEquals(0, countDownLatch.getCount());
+        //update existing beer
+        Mono<ResponseEntity<Void>> updateResMono = updateBeerDto(id, beerToUpdate);
+
+        //Assertion #1
+        StepVerifier.create(updateResMono)
+                    .assertNext(res -> assertEquals(HttpStatus.NO_CONTENT, res.getStatusCode()))
+                    .verifyComplete();
+
+        //Assertion #2
+        Mono<BeerDto> checkBeerDto = getBeerDtoMono(id);
+        StepVerifier.create(checkBeerDto)
+                    .assertNext(beer -> assertEquals(newName, beer.getBeerName()))
+                    .verifyComplete();
     }
 
     @Test
     void testUpdateBeer_NotFound() throws InterruptedException {
-        CountDownLatch countDownLatch = new CountDownLatch(2);
-        Integer randomId = (int) (Math.random() * Math.pow(10, 6));
-        log.debug("randomId = {}", randomId);
+        Integer invalidId = (int) (Math.random() * Math.pow(10, 6));
         BeerDto updatePayload = BeerDto.builder()
                                        .beerName("JTsUpdate")
                                        .beerStyle("PALE_ALE")
                                        .upc("12345667")
                                        .price(new BigDecimal("9.99"))
                                        .build();
+        //update existing beer
+        Mono<ResponseEntity<Void>> updateResMono = updateBeerDto(invalidId, updatePayload);
 
-        webClient.put()
-                 .uri("/api/v2/beer/" + randomId)
-                 .contentType(MediaType.APPLICATION_JSON)
-                 .body(BodyInserters.fromValue(updatePayload))
-                 .retrieve()
-                 .toBodilessEntity()
-                 .subscribe(responseEntity -> {
-                 }, throwable -> {
-                     if (NOT_FOUND_EXCEPTION
-                             .equals(throwable.getClass()
-                                              .getName())) {
-                         WebClientResponseException ex = (WebClientResponseException) throwable;
-
-                         if (ex.getStatusCode()
-                               .equals(HttpStatus.NOT_FOUND)) {
-                             countDownLatch.countDown();
-                         }
-                     }
-                 });
-
-        countDownLatch.countDown();
-
-        countDownLatch.await(1000, TimeUnit.MILLISECONDS);
-        assertEquals(0, countDownLatch.getCount());
+        StepVerifier.create(updateResMono)
+                    .expectErrorMatches(t -> assertExceptionThrown(t, NOT_FOUND_EXCEPTION))
+                    .verify();
     }
 
     @Test
@@ -289,15 +238,10 @@ public class WebClientV2IT {
                     .verifyComplete();
 
         //Get the beer with same id again and assert NotFound
-        Mono<BeerDto> readBeerAgain = webClient.get()
-                                               .uri("/api/v2/beer/" + beerId)
-                                               .accept(MediaType.APPLICATION_JSON)
-                                               .retrieve()
-                                               .bodyToMono(BeerDto.class);
+        Mono<BeerDto> doubleCheckMono = getBeerDtoMono(beerId);
 
-        StepVerifier.create(readBeerAgain)
-                    .expectErrorMatches(throwable -> throwable instanceof WebClientResponseException t &&
-                            NOT_FOUND_EXCEPTION.equals(t.getClass().getName()))
+        StepVerifier.create(doubleCheckMono)
+                    .expectErrorMatches(t -> assertExceptionThrown(t, NOT_FOUND_EXCEPTION))
                     .verify();
     }
 
@@ -310,8 +254,7 @@ public class WebClientV2IT {
                                                            .toBodilessEntity();
 
         StepVerifier.create(monoResponse)
-                    .expectErrorMatches(throwable -> throwable instanceof WebClientResponseException t &&
-                            NOT_FOUND_EXCEPTION.equals(t.getClass().getName()))
+                    .expectErrorMatches(t -> assertExceptionThrown(t, NOT_FOUND_EXCEPTION))
                     .verify();
     }
 }
